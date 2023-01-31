@@ -33,6 +33,8 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: "16.17.0"
+      # Tests just need the file to exist with the appropriate exports - the values do not matter.
+      - run: cp frontend/src/consts.template.js frontend/src/consts.js
       - run: cd frontend && npm install && npm test
   api-test:
     runs-on: ubuntu-latest
@@ -42,7 +44,7 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/setup-go@v3
         with:
-          go-version: "1.13"
+          go-version: "1.19"
       - run: cd api && go test ./...
   cli-test:
     runs-on: ubuntu-latest
@@ -52,5 +54,8 @@ jobs:
           ref: ${{ github.head_ref }}
       - uses: actions/setup-go@v3
         with:
-          go-version: "1.13"
+          go-version: "1.19"
+      # CLI test requires a dummy ~/.aws/credentials and config file exists.
+      - run: mkdir -p ~/.aws
+      - run: touch ~/.aws/{credentials,config}
       - run: cd cli && go test ./...
