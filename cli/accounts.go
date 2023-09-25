@@ -109,6 +109,8 @@ func refreshAccounts(ctx context.Context, serverAddr *url.URL, tok *oauth2.Token
 			ID:    app.ID,
 			Name:  app.Name,
 			Alias: generateDefaultAlias(app.Name),
+			Href:  app.Href,
+			Type:  app.Type,
 		}
 	}
 
