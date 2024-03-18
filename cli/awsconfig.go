@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/go-ini/ini"
 	homedir "github.com/mitchellh/go-homedir"
@@ -53,17 +52,11 @@ func ResolveAWSCredentialsPath(rootPath string) string {
 	return rootPath
 }
 
-func saveCredentialEntry(file *ini.File, entry CloudCliEntry, cloud string) error {
+func saveCredentialEntry(file *ini.File, entry CloudCliEntry) error {
 	section := file.Section(entry.profileName)
-	if cloud == cloudAws {
-		section.Key("aws_access_key_id").SetValue(entry.keyID)
-		section.Key("aws_secret_access_key").SetValue(entry.key)
-		section.Key("aws_session_token").SetValue(entry.token)
-	} else if cloud == cloudTencent {
-		section.Key("tencent_access_key_id").SetValue(entry.keyID)
-		section.Key("tencent_secret_access_key").SetValue(entry.key)
-		section.Key("tencent_session_token").SetValue(entry.token)
-	}
+	section.Key("aws_access_key_id").SetValue(entry.keyID)
+	section.Key("aws_secret_access_key").SetValue(entry.key)
+	section.Key("aws_session_token").SetValue(entry.token)
 	return nil
 }
 
@@ -74,12 +67,7 @@ func SaveCloudCredentialInCLI(cloudCliPath string, entry CloudCliEntry) error {
 		return err
 	}
 
-	cloud := cloudAws
-	if strings.Contains(strings.ToLower(path), cloudTencent) {
-		cloud = cloudTencent
-	}
-
-	if err := saveCredentialEntry(file, entry, cloud); err != nil {
+	if err := saveCredentialEntry(file, entry); err != nil {
 		return err
 	}
 

@@ -31,7 +31,7 @@ type Account struct {
 }
 
 func (a *Account) NormalizeName() string {
-	magicPrefixes := []string{"AWS - ", "Tencent - "}
+	magicPrefixes := []string{"AWS - "}
 	name := a.Name
 	for _, prefix := range magicPrefixes {
 		name = strings.TrimPrefix(name, prefix)
@@ -62,9 +62,8 @@ type accountSet struct {
 	accounts map[string]*Account
 }
 
-// need support Aws and Tencent
 func generateDefaultAlias(name string) string {
-	magicPrefixes := []string{"AWS -", "Tencent -", "Tencent Cloud -"}
+	magicPrefixes := []string{"AWS -"}
 	for _, prefix := range magicPrefixes {
 		name = strings.TrimPrefix(name, prefix)
 		name = strings.TrimSpace(name)
