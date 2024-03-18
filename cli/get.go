@@ -12,12 +12,16 @@ import (
 )
 
 var (
-	FlagRegion        = "region"
-	FlagRoleName      = "role"
-	FlagTimeRemaining = "time-remaining"
-	FlagTimeToLive    = "ttl"
-	FlagBypassCache   = "bypass-cache"
-	FlagLogin         = "login"
+	FlagRegion          = "region"
+	FlagRoleName        = "role"
+	FlagTimeRemaining   = "time-remaining"
+	FlagTimeToLive      = "ttl"
+	FlagBypassCache     = "bypass-cache"
+	FlagLogin           = "login"
+	FlagShellType       = "shell"
+	FlagOutputType      = "out"
+	FlagRoleSessionName = "role-session-name"
+	FlagAWSCLIPath      = "awscli"
 )
 
 var (
@@ -25,10 +29,8 @@ var (
 	outputTypeEnvironmentVariable = "env"
 	// outputTypeAWSCredentialsFile indicates that keyconjurer will dump the credentials into the ~/.aws/credentials file.
 	outputTypeAWSCredentialsFile = "awscli"
-	// outputTypeTencentCredentialsFile indicates that keyconjurer will dump the credentials into the ~/.tencent/credentials file.
-	outputTypeTencentCredentialsFile = "tencentcli"
-	permittedOutputTypes             = []string{outputTypeAWSCredentialsFile, outputTypeEnvironmentVariable, outputTypeTencentCredentialsFile}
-	permittedShellTypes              = []string{shellTypePowershell, shellTypeBash, shellTypeBasic, shellTypeInfer}
+	permittedOutputTypes         = []string{outputTypeAWSCredentialsFile, outputTypeEnvironmentVariable}
+	permittedShellTypes          = []string{shellTypePowershell, shellTypeBash, shellTypeBasic, shellTypeInfer}
 )
 
 func init() {
@@ -37,13 +39,11 @@ func init() {
 	getCmd.Flags().UintP(FlagTimeRemaining, "t", DefaultTimeRemaining, "Request new keys if there are no keys in the environment or the current keys expire within <time-remaining> minutes. Defaults to 60.")
 	getCmd.Flags().StringP(FlagRoleName, "r", "", "The name of the role to assume.")
 	getCmd.Flags().String(FlagRoleSessionName, "KeyConjurer-AssumeRole", "the name of the role session name that will show up in CloudTrail logs")
-	getCmd.Flags().StringP(FlagOutputType, "o", outputTypeEnvironmentVariable, "Format to save new credentials in. Supported outputs: env, awscli,tencentcli")
+	getCmd.Flags().StringP(FlagOutputType, "o", outputTypeEnvironmentVariable, "Format to save new credentials in. Supported outputs: env, awscli")
 	getCmd.Flags().String(FlagShellType, shellTypeInfer, "If output type is env, determines which format to output credentials in - by default, the format is inferred based on the execution environment. WSL users may wish to overwrite this to `bash`")
-	getCmd.Flags().String(FlagAWSCLIPath, "~/.aws/", "Path for directory used by the aws-cli tool. Default is \"~/.aws\".")
-	getCmd.Flags().String(FlagTencentCLIPath, "~/.tencent/", "Path for directory used by the tencent-cli tool. Default is \"~/.tencent\".")
-	getCmd.Flags().String(FlagCloudType, "aws", "Choose a cloud vendor. Default is aws. Can choose aws or tencent")
 	getCmd.Flags().Bool(FlagBypassCache, false, "Do not check the cache for accounts and send the application ID as-is to Okta. This is useful if you have an ID you know is an Okta application ID and it is not stored in your local account cache.")
 	getCmd.Flags().Bool(FlagLogin, false, "Login to Okta before running the command")
+	getCmd.Flags().String(FlagAWSCLIPath, "~/.aws/", "Path for directory used by the aws CLI")
 }
 
 func isMemberOfSlice(slice []string, val string) bool {
@@ -95,9 +95,7 @@ A role must be specified when using this command through the --role flag. You ma
 		outputType, _ := cmd.Flags().GetString(FlagOutputType)
 		shellType, _ := cmd.Flags().GetString(FlagShellType)
 		roleName, _ := cmd.Flags().GetString(FlagRoleName)
-		cloudType, _ := cmd.Flags().GetString(FlagCloudType)
 		awsCliPath, _ := cmd.Flags().GetString(FlagAWSCLIPath)
-		tencentCliPath, _ := cmd.Flags().GetString(FlagTencentCLIPath)
 
 		if !isMemberOfSlice(permittedOutputTypes, outputType) {
 			return ValueError{Value: outputType, ValidValues: permittedOutputTypes}
@@ -135,15 +133,9 @@ A role must be specified when using this command through the --role flag. You ma
 			timeRemaining = config.TimeRemaining
 		}
 
-		var credentials CloudCredentials
-		if cloudType == cloudAws {
-			credentials = LoadAWSCredentialsFromEnvironment()
-		} else if cloudType == cloudTencent {
-			credentials = LoadTencentCredentialsFromEnvironment()
-		}
-
+		credentials := LoadAWSCredentialsFromEnvironment()
 		if credentials.ValidUntil(account, time.Duration(timeRemaining)*time.Minute) {
-			return echoCredentials(accountID, accountID, credentials, outputType, shellType, awsCliPath, tencentCliPath)
+			return echoCredentials(accountID, accountID, credentials, outputType, shellType, awsCliPath)
 		}
 
 		samlResponse, assertionStr, err := DiscoverConfigAndExchangeTokenForAssertion(cmd.Context(), NewHTTPClient(), config.Tokens, oidcDomain, clientID, account.ID)
@@ -160,38 +152,33 @@ A role must be specified when using this command through the --role flag. You ma
 			ttl = config.TTL
 		}
 
-		if cloudType == cloudAws {
-			region, _ := cmd.Flags().GetString(FlagRegion)
-			session, _ := session.NewSession(&aws.Config{Region: aws.String(region)})
-			stsClient := sts.New(session)
-			timeoutInSeconds := int64(3600 * ttl)
-			resp, err := stsClient.AssumeRoleWithSAMLWithContext(ctx, &sts.AssumeRoleWithSAMLInput{
-				DurationSeconds: &timeoutInSeconds,
-				PrincipalArn:    &pair.ProviderARN,
-				RoleArn:         &pair.RoleARN,
-				SAMLAssertion:   &assertionStr,
-			})
+		region, _ := cmd.Flags().GetString(FlagRegion)
+		session, _ := session.NewSession(&aws.Config{Region: aws.String(region)})
+		stsClient := sts.New(session)
+		timeoutInSeconds := int64(3600 * ttl)
+		resp, err := stsClient.AssumeRoleWithSAMLWithContext(ctx, &sts.AssumeRoleWithSAMLInput{
+			DurationSeconds: &timeoutInSeconds,
+			PrincipalArn:    &pair.ProviderARN,
+			RoleArn:         &pair.RoleARN,
+			SAMLAssertion:   &assertionStr,
+		})
 
-			if err, ok := tryParseTimeToLiveError(err); ok {
-				return err
-			}
+		if err, ok := tryParseTimeToLiveError(err); ok {
+			return err
+		}
 
-			if err != nil {
-				return AWSError{
-					InnerError: err,
-					Message:    "failed to exchange credentials",
-				}
+		if err != nil {
+			return AWSError{
+				InnerError: err,
+				Message:    "failed to exchange credentials",
 			}
+		}
 
-			credentials = CloudCredentials{
-				AccessKeyID:     *resp.Credentials.AccessKeyId,
-				Expiration:      resp.Credentials.Expiration.Format(time.RFC3339),
-				SecretAccessKey: *resp.Credentials.SecretAccessKey,
-				SessionToken:    *resp.Credentials.SessionToken,
-				credentialsType: cloudType,
-			}
-		} else {
-			panic("not yet implemented")
+		credentials = CloudCredentials{
+			AccessKeyID:     *resp.Credentials.AccessKeyId,
+			Expiration:      resp.Credentials.Expiration.Format(time.RFC3339),
+			SecretAccessKey: *resp.Credentials.SecretAccessKey,
+			SessionToken:    *resp.Credentials.SessionToken,
 		}
 
 		if account != nil {
@@ -199,22 +186,18 @@ A role must be specified when using this command through the --role flag. You ma
 		}
 		config.LastUsedAccount = &accountID
 
-		return echoCredentials(accountID, accountID, credentials, outputType, shellType, awsCliPath, tencentCliPath)
+		return echoCredentials(accountID, accountID, credentials, outputType, shellType, awsCliPath)
 	}}
 
-func echoCredentials(id, name string, credentials CloudCredentials, outputType, shellType, awsCliPath, tencentCliPath string) error {
+func echoCredentials(id, name string, credentials CloudCredentials, outputType, shellType, awsCliPath string) error {
 	switch outputType {
 	case outputTypeEnvironmentVariable:
 		credentials.WriteFormat(os.Stdout, shellType)
 		return nil
-	case outputTypeAWSCredentialsFile, outputTypeTencentCredentialsFile:
+	case outputTypeAWSCredentialsFile:
 		acc := Account{ID: id, Name: name}
 		newCliEntry := NewCloudCliEntry(credentials, &acc)
-		cliPath := awsCliPath
-		if outputType == outputTypeTencentCredentialsFile {
-			cliPath = tencentCliPath
-		}
-		return SaveCloudCredentialInCLI(cliPath, newCliEntry)
+		return SaveCloudCredentialInCLI(awsCliPath, newCliEntry)
 	default:
 		return fmt.Errorf("%s is an invalid output type", outputType)
 	}

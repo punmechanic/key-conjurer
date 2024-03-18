@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/okta/okta-sdk-golang/v2/okta"
 	"golang.org/x/exp/slog"
@@ -57,7 +56,7 @@ func ServeUserApplications(okta OktaService) http.Handler {
 
 		var accounts []Application
 		for _, app := range applications {
-			if app.AppName == "amazon_aws" || strings.Contains(app.AppName, "tencent") {
+			if app.AppName == "amazon_aws" {
 				accounts = append(accounts, Application{
 					ID:   app.AppInstanceId,
 					Name: app.Label,

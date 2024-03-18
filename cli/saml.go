@@ -11,27 +11,16 @@ type RoleProviderPair struct {
 	ProviderARN string
 }
 
-const (
-	awsFlag     = 0
-	tencentFlag = 1
-)
-
 func ListSAMLRoles(response *saml.Response) []string {
 	if response == nil {
 		return nil
 	}
 
 	roleURL := "https://aws.amazon.com/SAML/Attributes/Role"
-	roleSubstr := "role/"
-	if response.GetAttribute(roleURL) == "" {
-		roleURL = "https://cloud.tencent.com/SAML/Attributes/Role"
-		roleSubstr = "roleName/"
-	}
-
 	var names []string
 	for _, v := range response.GetAttributeValues(roleURL) {
 		p := getARN(v)
-		idx := strings.Index(p.RoleARN, roleSubstr)
+		idx := strings.Index(p.RoleARN, "role/")
 		parts := strings.Split(p.RoleARN[idx:], "/")
 		names = append(names, parts[1])
 	}
@@ -40,21 +29,16 @@ func ListSAMLRoles(response *saml.Response) []string {
 }
 
 func FindRoleInSAML(roleName string, response *saml.Response) (RoleProviderPair, bool) {
+	var rpp RoleProviderPair
 	if response == nil {
-		return RoleProviderPair{}, false
+		return rpp, false
 	}
 
 	roleURL := "https://aws.amazon.com/SAML/Attributes/Role"
 	roleSubstr := "role/"
 	attrs := response.GetAttributeValues(roleURL)
 	if len(attrs) == 0 {
-		attrs = response.GetAttributeValues("https://cloud.tencent.com/SAML/Attributes/Role")
-		roleSubstr = "roleName/"
-	}
-
-	if len(attrs) == 0 {
-		// The SAML assertoin contains no known roles for AWS or Tencent.
-		return RoleProviderPair{}, false
+		return rpp, false
 	}
 
 	var pairs []RoleProviderPair
@@ -63,7 +47,7 @@ func FindRoleInSAML(roleName string, response *saml.Response) (RoleProviderPair,
 	}
 
 	if len(pairs) == 0 {
-		return RoleProviderPair{}, false
+		return rpp, false
 	}
 
 	var pair RoleProviderPair
@@ -76,7 +60,7 @@ func FindRoleInSAML(roleName string, response *saml.Response) (RoleProviderPair,
 	}
 
 	if pair.RoleARN == "" {
-		return RoleProviderPair{}, false
+		return rpp, false
 	}
 
 	return pair, true
