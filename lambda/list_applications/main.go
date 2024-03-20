@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"net/url"
 	"os"
 
@@ -12,18 +11,12 @@ import (
 )
 
 func main() {
-	settings, err := api.NewSettings(context.Background())
-	if err != nil {
-		slog.Error("could not fetch configuration: %s", err)
-		os.Exit(1)
-	}
-
 	oktaDomain := url.URL{
 		Scheme: "https",
-		Host:   settings.OktaHost,
+		Host:   os.Getenv("OKTA_HOST"),
 	}
 
 	slog.Info("running list_applications_v2 Lambda")
-	service := api.NewOktaService(&oktaDomain, settings.OktaToken)
+	service := api.NewOktaService(&oktaDomain, os.Getenv("OKTA_TOKEN"))
 	lambda.StartHandler(internal.Lambdaify(api.ServeUserApplications(service)))
 }
