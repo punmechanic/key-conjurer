@@ -11,7 +11,8 @@ RUN dnf install unzip -y
 RUN mkdir -p /opt/extensions/
 RUN curl --silent https://releases.hashicorp.com/vault-lambda-extension/0.5.0/vault-lambda-extension_0.5.0_linux_amd64.zip --output vault-lambda-extension.zip && \
     unzip vault-lambda-extension.zip && \
-    mv extensions/vault-lambda-extension /opt/extensions/
+    mv extensions/vault-lambda-extension /opt/extensions/vault
 
 COPY --from=build /bin/bootstrap /main
-CMD ["/main"]
+COPY docker/lambda/run.sh /run.sh
+CMD ["/run.sh"]
