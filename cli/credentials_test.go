@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
@@ -66,4 +67,74 @@ func TestTimeWindowEnvCreds(t *testing.T) {
 	t.Log("testing minutes window is outside 1hr period for test creds")
 	assert.False(t, creds.ValidUntil(account, 60*time.Minute), "credentials should be valid")
 	assert.False(t, creds.ValidUntil(account, 61*time.Minute), "credentials should be valid")
+}
+
+func Test_CloudCredentials_WriteFormat_AWS_Bash(t *testing.T) {
+	blob := `export AWS_ACCESS_KEY_ID="access key"
+export AWS_SECRET_ACCESS_KEY="secret key"
+export AWS_SESSION_TOKEN="session token"
+export AWS_SECURITY_TOKEN=$AWS_SESSION_TOKEN
+export TF_VAR_access_key=$AWS_ACCESS_KEY_ID
+export TF_VAR_secret_key=$AWS_SECRET_ACCESS_KEY
+export TF_VAR_token=$AWS_SESSION_TOKEN
+export AWSKEY_EXPIRATION="expiration"
+export AWSKEY_ACCOUNT="account id"
+`
+	var buf bytes.Buffer
+	creds := CloudCredentials{
+		AccountID:       "account id",
+		AccessKeyID:     "access key",
+		SecretAccessKey: "secret key",
+		SessionToken:    "session token",
+		Expiration:      "expiration",
+	}
+	creds.WriteFormat(&buf, shellTypeBash)
+	assert.Equal(t, blob, buf.String())
+}
+
+func Test_CloudCredentials_WriteFormat_AWS_Powershell(t *testing.T) {
+	blob := `$Env:AWS_ACCESS_KEY_ID = "access key"
+$Env:AWS_SECRET_ACCESS_KEY = "secret key"
+$Env:AWS_SESSION_TOKEN = "session token"
+$Env:AWS_SECURITY_TOKEN = $Env:AWS_SESSION_TOKEN
+$Env:TF_VAR_access_key = $Env:AWS_ACCESS_KEY_ID
+$Env:TF_VAR_secret_key = $Env:AWS_SECRET_ACCESS_KEY
+$Env:TF_VAR_token = $Env:AWS_SESSION_TOKEN
+$Env:AWSKEY_EXPIRATION = "expiration"
+$Env:AWSKEY_ACCOUNT = "account id"
+`
+	var buf bytes.Buffer
+	creds := CloudCredentials{
+		AccountID:       "account id",
+		AccessKeyID:     "access key",
+		SecretAccessKey: "secret key",
+		SessionToken:    "session token",
+		Expiration:      "expiration",
+	}
+	creds.WriteFormat(&buf, shellTypePowershell)
+	assert.Equal(t, blob, buf.String())
+}
+
+func Test_CloudCredentials_WriteFormat_AWS_Basic(t *testing.T) {
+	blob := `SET AWS_ACCESS_KEY_ID=access key
+SET AWS_SECRET_ACCESS_KEY=secret key
+SET AWS_SESSION_TOKEN=session token
+SET AWS_SECURITY_TOKEN=%AWS_SESSION_TOKEN%
+SET TF_VAR_access_key=%AWS_ACCESS_KEY_ID%
+SET TF_VAR_secret_key=%AWS_SECRET_ACCESS_KEY%
+SET TF_VAR_token=%AWS_SESSION_TOKEN%
+SET AWSKEY_EXPIRATION=expiration
+SET AWSKEY_ACCOUNT=account id
+`
+	var buf bytes.Buffer
+	creds := CloudCredentials{
+		AccountID:       "account id",
+		AccessKeyID:     "access key",
+		SecretAccessKey: "secret key",
+		SessionToken:    "session token",
+		Expiration:      "expiration",
+	}
+
+	creds.WriteFormat(&buf, shellTypeBasic)
+	assert.Equal(t, blob, buf.String())
 }
