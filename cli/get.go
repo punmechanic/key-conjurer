@@ -44,8 +44,6 @@ func init() {
 	getCmd.Flags().Bool(FlagBypassCache, false, "Do not check the cache for accounts and send the application ID as-is to Okta. This is useful if you have an ID you know is an Okta application ID and it is not stored in your local account cache.")
 	getCmd.Flags().Bool(FlagLogin, false, "Login to Okta before running the command")
 	getCmd.Flags().String(FlagAWSCLIPath, "~/.aws/", "Path for directory used by the aws CLI")
-	getCmd.Flags().BoolP(FlagURLOnly, "u", false, "Print only the URL to visit rather than a user-friendly message")
-	getCmd.Flags().BoolP(FlagNoBrowser, "b", false, "Do not open a browser window, printing the URL instead")
 }
 
 func isMemberOfSlice(slice []string, val string) bool {
@@ -79,17 +77,19 @@ A role must be specified when using this command through the --role flag. You ma
 
 		if HasTokenExpired(config.Tokens) {
 			if ok, _ := cmd.Flags().GetBool(FlagLogin); ok {
-				urlOnly, _ := cmd.Flags().GetBool(FlagURLOnly)
-				noBrowser, _ := cmd.Flags().GetBool(FlagNoBrowser)
+				// urlOnly, _ := cmd.Flags().GetBool(FlagURLOnly)
+				// noBrowser, _ := cmd.Flags().GetBool(FlagNoBrowser)
 				login := LoginCommand{
-					Config:        config,
-					OIDCDomain:    oidcDomain,
-					ClientID:      clientID,
-					MachineOutput: ShouldUseMachineOutput(cmd.Flags()) || urlOnly,
-					NoBrowser:     noBrowser,
+					OIDCDomain: oidcDomain,
+					ClientID:   clientID,
+					Output:     LoginOutputFriendly,
 				}
 
-				if err := login.Execute(cmd.Context()); err != nil {
+				ctx := AppContext{
+					Config: config,
+				}
+
+				if err := login.Run(&ctx); err != nil {
 					return err
 				}
 			} else {

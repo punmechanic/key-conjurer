@@ -8,19 +8,14 @@ import (
 	"log/slog"
 
 	"github.com/pkg/browser"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 var (
-	FlagURLOnly   = "url-only"
-	FlagNoBrowser = "no-browser"
+	LoginOutputBrowser  = "browser"
+	LoginOutputURL      = "url"
+	LoginOutputFriendly = "friendly"
 )
-
-func init() {
-	loginCmd.Flags().BoolP(FlagURLOnly, "u", false, "Print only the URL to visit rather than a user-friendly message")
-	loginCmd.Flags().BoolP(FlagNoBrowser, "b", false, "Do not open a browser window, printing the URL instead")
-}
 
 // ShouldUseMachineOutput indicates whether or not we should write to standard output as if the user is a machine.
 //
@@ -32,71 +27,46 @@ func ShouldUseMachineOutput(flags *pflag.FlagSet) bool {
 	return isPiped || quiet
 }
 
-var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Authenticate with KeyConjurer.",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		config := ConfigFromCommand(cmd)
-		if !HasTokenExpired(config.Tokens) {
-			return nil
-		}
-
-		oidcDomain, _ := cmd.Flags().GetString(FlagOIDCDomain)
-		clientID, _ := cmd.Flags().GetString(FlagClientID)
-		urlOnly, _ := cmd.Flags().GetBool(FlagURLOnly)
-		noBrowser, _ := cmd.Flags().GetBool(FlagNoBrowser)
-		command := LoginCommand{
-			Config:        config,
-			OIDCDomain:    oidcDomain,
-			ClientID:      clientID,
-			MachineOutput: ShouldUseMachineOutput(cmd.Flags()) || urlOnly,
-			NoBrowser:     noBrowser,
-		}
-
-		return command.Execute(cmd.Context())
-	},
-}
-
 type LoginCommand struct {
-	Config        *Config
-	OIDCDomain    string
-	ClientID      string
-	MachineOutput bool
-	NoBrowser     bool
+	OIDCDomain string `hidden:""`
+	ClientID   string `hidden:""`
+	Output     string `enum:"browser,url,friendly" default:"friendly"`
 }
 
 func (c LoginCommand) Help() string {
 	return "You will be required to open the URL printed to the console."
 }
 
-func (c LoginCommand) Execute(ctx context.Context) error {
-	oauthCfg, err := DiscoverOAuth2Config(ctx, c.OIDCDomain, c.ClientID)
+func (c LoginCommand) Run(ctx *AppContext) error {
+	oauthCfg, err := DiscoverOAuth2Config(context.TODO(), c.OIDCDomain, c.ClientID)
 	if err != nil {
 		return err
+	}
+
+	var fn func(string) error
+	switch c.Output {
+	case LoginOutputFriendly:
+		fn = friendlyPrintURLToConsole
+	case LoginOutputBrowser:
+		fn = openBrowserToURL
+	case LoginOutputURL:
+		fn = printURLToConsole
 	}
 
 	handler := RedirectionFlowHandler{
 		Config:       oauthCfg,
 		Listen:       ListenAnyPort("127.0.0.1", CallbackPorts),
-		OnDisplayURL: openBrowserToURL,
-	}
-
-	if c.NoBrowser {
-		if c.MachineOutput {
-			handler.OnDisplayURL = printURLToConsole
-		} else {
-			handler.OnDisplayURL = friendlyPrintURLToConsole
-		}
+		OnDisplayURL: fn,
 	}
 
 	state := GenerateState()
 	challenge := GeneratePkceChallenge()
-	token, err := handler.HandlePendingSession(ctx, challenge, state)
+	token, err := handler.HandlePendingSession(context.TODO(), challenge, state)
 	if err != nil {
 		return err
 	}
 
-	return c.Config.SaveOAuthToken(token)
+	return ctx.Config.SaveOAuthToken(token)
 }
 
 func printURLToConsole(url string) error {

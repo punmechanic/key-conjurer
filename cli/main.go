@@ -43,6 +43,10 @@ type CLI struct {
 	Accounts struct{}     `cmd:"accounts"`
 }
 
+type AppContext struct {
+	Config *Config
+}
+
 func main() {
 
 	// args := os.Args[1:]
@@ -52,7 +56,7 @@ func main() {
 
 	// rootCmd.SetArgs(args)
 	ctx := kong.Parse(&CLI{})
-	err := ctx.Run()
+	err := ctx.Run(&AppContext{Config: nil})
 
 	if IsWindowsPortAccessError(err) {
 		fmt.Fprintf(os.Stderr, "Encountered an issue when opening the port for KeyConjurer: %s\n", err)
