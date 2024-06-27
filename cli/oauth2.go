@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -21,6 +22,21 @@ import (
 	rootcerts "github.com/hashicorp/go-rootcerts"
 	"golang.org/x/net/html"
 	"golang.org/x/oauth2"
+)
+
+type (
+	TokenType string
+	GrantType string
+)
+
+var (
+	TokenTypeAccessToken TokenType = "urn:ietf:params:oauth:token-type:access_token"
+	// TokenTypeOktaWebSSOToken is a URN for a token type that appears to be unique to Okta,  that is not documented anywhere.
+	//
+	// https://www.linkedin.com/pulse/oktas-aws-cli-app-mysterious-case-powerful-okta-apis-chaim-sanders/
+	TokenTypeOktaWebSSOToken TokenType = "urn:okta:oauth:token-type:web_sso_token"
+	TokenTypeIDToken         TokenType = "urn:ietf:params:oauth:token-type:id_token"
+	GrantTypeTokenExchange   GrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
 )
 
 var ErrNoSAMLAssertion = errors.New("no saml assertion")
@@ -46,6 +62,7 @@ func NewHTTPClient() *http.Client {
 func DiscoverOAuth2Config(ctx context.Context, domain, clientID string) (*oauth2.Config, error) {
 	provider, err := oidc.NewProvider(ctx, domain)
 	if err != nil {
+		log.Printf("%s", err)
 		return nil, fmt.Errorf("couldn't discover OIDC configuration for %s: %w", domain, err)
 	}
 
@@ -253,29 +270,64 @@ func (r RedirectionFlowHandler) HandlePendingSession(ctx context.Context, challe
 	}
 }
 
-func ExchangeAccessTokenForWebSSOToken(ctx context.Context, client *http.Client, oauthCfg *oauth2.Config, token *TokenSet, applicationID string) (*oauth2.Token, error) {
-	if client == nil {
-		client = http.DefaultClient
-	}
+type TokenExchange struct {
+	ClientID           string
+	ActorToken         string
+	ActorTokenType     TokenType
+	SubjectToken       string
+	SubjectTokenType   TokenType
+	GrantType          GrantType
+	RequestedTokenType TokenType
+	Audience           string
+}
+
+func (r TokenExchange) NewRequest(ctx context.Context, config *oauth2.Config) (*http.Request, error) {
 	// https://datatracker.ietf.org/doc/html/rfc8693
 	data := url.Values{
-		"client_id":          {oauthCfg.ClientID},
-		"actor_token":        {token.AccessToken},
-		"actor_token_type":   {"urn:ietf:params:oauth:token-type:access_token"},
-		"subject_token":      {token.IDToken},
-		"subject_token_type": {"urn:ietf:params:oauth:token-type:id_token"},
-		"grant_type":         {"urn:ietf:params:oauth:grant-type:token-exchange"},
-		// https://www.linkedin.com/pulse/oktas-aws-cli-app-mysterious-case-powerful-okta-apis-chaim-sanders/
-		"requested_token_type": {"urn:okta:oauth:token-type:web_sso_token"},
-		"audience":             {fmt.Sprintf("urn:okta:apps:%s", applicationID)},
+		"client_id":            {r.ClientID},
+		"actor_token":          {r.ActorToken},
+		"actor_token_type":     {string(r.ActorTokenType)},
+		"subject_token":        {r.SubjectToken},
+		"subject_token_type":   {string(r.SubjectTokenType)},
+		"grant_type":           {string(r.GrantType)},
+		"requested_token_type": {string(r.RequestedTokenType)},
+		"audience":             {r.Audience},
 	}
 	body := strings.NewReader(data.Encode())
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, oauthCfg.Endpoint.TokenURL, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.Endpoint.TokenURL, body)
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	return req, nil
+}
+
+func makeOktaApplicationURN(applicationID string) string {
+	return fmt.Sprintf("urn:okta:apps:%s", applicationID)
+}
+
+func ExchangeAccessTokenForWebSSOToken(ctx context.Context, client *http.Client, oauthCfg *oauth2.Config, token *TokenSet, applicationID string) (*oauth2.Token, error) {
+	tex := TokenExchange{
+		ClientID:           oauthCfg.ClientID,
+		ActorToken:         token.AccessToken,
+		ActorTokenType:     TokenTypeAccessToken,
+		SubjectToken:       token.IDToken,
+		SubjectTokenType:   TokenTypeIDToken,
+		GrantType:          GrantTypeTokenExchange,
+		RequestedTokenType: TokenTypeOktaWebSSOToken,
+		Audience:           makeOktaApplicationURN(applicationID),
+	}
+	req, err := tex.NewRequest(ctx, oauthCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if client == nil {
+		client = http.DefaultClient
+	}
+
 	// TODO: The response can indicate a failure, we should check that for this function
 	resp, err := client.Do(req)
 	if err != nil {
@@ -322,7 +374,7 @@ func ExchangeWebSSOTokenForSAMLAssertion(ctx context.Context, client *http.Clien
 func DiscoverConfigAndExchangeTokenForAssertion(ctx context.Context, client *http.Client, toks *TokenSet, oidcDomain, clientID, applicationID string) (*saml.Response, string, error) {
 	oauthCfg, err := DiscoverOAuth2Config(ctx, oidcDomain, clientID)
 	if err != nil {
-		return nil, "", OktaError{Message: "could not discover oauth2  config", InnerError: err}
+		return nil, "", OktaError{Message: "could not discover oauth2 config", InnerError: err}
 	}
 
 	tok, err := ExchangeAccessTokenForWebSSOToken(ctx, client, oauthCfg, toks, applicationID)
@@ -332,6 +384,7 @@ func DiscoverConfigAndExchangeTokenForAssertion(ctx context.Context, client *htt
 
 	assertionBytes, err := ExchangeWebSSOTokenForSAMLAssertion(ctx, client, oidcDomain, tok)
 	if err != nil {
+		log.Printf("%#v", err)
 		return nil, "", OktaError{Message: "failed to fetch SAML assertion", InnerError: err}
 	}
 
