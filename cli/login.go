@@ -35,7 +35,6 @@ func ShouldUseMachineOutput(flags *pflag.FlagSet) bool {
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate with KeyConjurer.",
-	Long:  "Login to KeyConjurer using OAuth2. You will be required to open the URL printed to the console or scan a QR code.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config := ConfigFromCommand(cmd)
 		if !HasTokenExpired(config.Tokens) {
@@ -64,6 +63,10 @@ type LoginCommand struct {
 	ClientID      string
 	MachineOutput bool
 	NoBrowser     bool
+}
+
+func (c LoginCommand) Help() string {
+	return "You will be required to open the URL printed to the console."
 }
 
 func (c LoginCommand) Execute(ctx context.Context) error {

@@ -25,6 +25,7 @@ require (
 )
 
 require (
+	github.com/alecthomas/kong v0.9.0 // indirect
 	github.com/aws/smithy-go v1.20.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

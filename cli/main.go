@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
 
 	"log/slog"
 
+	"github.com/alecthomas/kong"
 	"github.com/spf13/cobra"
 )
 
@@ -35,14 +35,25 @@ func init() {
 	slog.SetDefault(slog.New(handler))
 }
 
-func main() {
-	args := os.Args[1:]
-	if flag, ok := os.LookupEnv("KEYCONJURERFLAGS"); ok {
-		args = append(args, strings.Split(flag, " ")...)
-	}
-	rootCmd.SetArgs(args)
+type CLI struct {
+	Login    LoginCommand `cmd:"login" help:"Log in to KeyConjurer using a web browser."`
+	Get      struct{}     `cmd:"get"`
+	Alias    struct{}     `cmd:"alias"`
+	Unalias  struct{}     `cmd:"unalias"`
+	Accounts struct{}     `cmd:"accounts"`
+}
 
-	err := rootCmd.Execute()
+func main() {
+
+	// args := os.Args[1:]
+	// if flag, ok := os.LookupEnv("KEYCONJURERFLAGS"); ok {
+	// 	args = append(args, strings.Split(flag, " ")...)
+	// }
+
+	// rootCmd.SetArgs(args)
+	ctx := kong.Parse(&CLI{})
+	err := ctx.Run()
+
 	if IsWindowsPortAccessError(err) {
 		fmt.Fprintf(os.Stderr, "Encountered an issue when opening the port for KeyConjurer: %s\n", err)
 		fmt.Fprintln(os.Stderr, "Consider running `net stop hns` and then `net start hns`")
