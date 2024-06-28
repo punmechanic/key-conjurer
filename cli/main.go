@@ -41,10 +41,13 @@ type CLI struct {
 	Alias        struct{}     `cmd:"alias"`
 	Unalias      struct{}     `cmd:"unalias"`
 	ListAccounts struct{}     `cmd:"accounts"`
+	ListRoles    struct{}     `cmd:"roles"`
 
 	OIDCDomain   string `name:"oidc_domain" hidden:"" help:"The domain of the OIDC IdP to use as an authorization server"`
 	OIDCClientID string `name:"client_id" hidden:"" help:"The client ID of the OIDC application to identify as"`
 	ConfigPath   string `name:"config" help:"The path to the configuration file" default:"~/.config/keyconjurer/config.json"`
+	Version      bool   `help:"Emit version information"`
+	Timeout      int    `help:"Amount of time in seconds to wait for KeyConjurer to respond" default:"120"`
 }
 
 type AppContext struct {
