@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"syscall"
 
 	"log/slog"
@@ -58,13 +59,26 @@ type AppContext struct {
 
 func main() {
 	var cli CLI
-	ctx := kong.Parse(&cli)
+	ctx := kong.Parse(&cli, kong.Name("keyconjurer"), kong.Description(`KeyConjurer retrieves temporary credentials from Okta with the assistance of an optional API.
+
+To get started run the following commands:
+	keyconjurer login
+	keyconjurer accounts
+	keyconjurer get <accountName>
+	`))
+
 	configPath := kong.ExpandPath(cli.ConfigPath)
 	config, err := LoadConfiguration(configPath)
 	if err != nil {
 		// Could not load configuration file
 		fmt.Fprintf(os.Stderr, "could not load configuration file %s: %s\n", configPath, err)
 		os.Exit(1)
+	}
+
+	if cli.Version {
+		version := fmt.Sprintf("keyconjurer-%s-%s %s (%s)", runtime.GOOS, runtime.GOARCH, Version, BuildTimestamp)
+		fmt.Fprintln(os.Stdout, version)
+		return
 	}
 
 	appCtx := AppContext{
