@@ -30,7 +30,7 @@ func ShouldUseMachineOutput(flags *pflag.FlagSet) bool {
 type LoginCommand struct {
 	OIDCDomain string `hidden:""`
 	ClientID   string `hidden:""`
-	Output     string `enum:"browser,url,friendly" default:"friendly"`
+	Output     string `enum:"browser,url,friendly" default:"browser"`
 }
 
 func (c LoginCommand) Help() string {
