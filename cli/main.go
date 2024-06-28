@@ -41,8 +41,8 @@ type CLI struct {
 	Get          GetCommand   `cmd:"get" help:"Retrieves temporary cloud API credentials."`
 	Alias        struct{}     `cmd:"alias"`
 	Unalias      struct{}     `cmd:"unalias"`
-	ListAccounts struct{}     `cmd:"accounts"`
-	ListRoles    struct{}     `cmd:"roles"`
+	ListAccounts struct{}     `cmd:"accounts" name:"accounts"`
+	ListRoles    struct{}     `cmd:"roles" name:"roles"`
 
 	OIDCDomain   string `name:"oidc_domain" hidden:"" help:"The domain of the OIDC IdP to use as an authorization server"`
 	OIDCClientID string `name:"client_id" hidden:"" help:"The client ID of the OIDC application to identify as"`
