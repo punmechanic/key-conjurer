@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -318,4 +319,32 @@ func EnsureConfigFileExists(fp string) (io.ReadWriteCloser, error) {
 	}
 
 	return os.OpenFile(fp, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+}
+
+func LoadConfiguration(path string) (Config, error) {
+	var cfg Config
+	file, err := EnsureConfigFileExists(path)
+	if err != nil {
+		return cfg, err
+	}
+
+	err = cfg.Read(file)
+	return cfg, err
+}
+
+func SaveConfiguration(path string, cfg Config) error {
+	// Do not use EnsureConfigFileExists here!
+	// EnsureConfigFileExists opens the file in append mode.
+	// If we open the file in append mode, we'll always append to the file. If we open the file in truncate mode before reading from the file, the content will be truncated _before we read from it_, which will cause a users configuration to be discarded every time we run the program.
+	if err := os.MkdirAll(filepath.Dir(path), os.ModeDir|os.FileMode(0755)); err != nil {
+		return err
+	}
+
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("unable to create %s reason: %w", path, err)
+	}
+
+	defer file.Close()
+	return cfg.Write(file)
 }

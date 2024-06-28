@@ -36,27 +36,55 @@ func init() {
 }
 
 type CLI struct {
-	Login    LoginCommand `cmd:"login" help:"Log in to KeyConjurer using a web browser."`
-	Get      struct{}     `cmd:"get"`
-	Alias    struct{}     `cmd:"alias"`
-	Unalias  struct{}     `cmd:"unalias"`
-	Accounts struct{}     `cmd:"accounts"`
+	Login        LoginCommand `cmd:"login" help:"Log in to KeyConjurer using a web browser."`
+	Get          struct{}     `cmd:"get"`
+	Alias        struct{}     `cmd:"alias"`
+	Unalias      struct{}     `cmd:"unalias"`
+	ListAccounts struct{}     `cmd:"accounts"`
+
+	OIDCDomain   string `name:"oidc_domain" hidden:"" help:"The domain of the OIDC IdP to use as an authorization server"`
+	OIDCClientID string `name:"client_id" hidden:"" help:"The client ID of the OIDC application to identify as"`
+	ConfigPath   string `name:"config" help:"The path to the configuration file" default:"~/.config/keyconjurer/config.json"`
 }
 
 type AppContext struct {
-	Config *Config
+	Config       *Config
+	OIDCDomain   string
+	OIDCClientID string
 }
 
 func main() {
+	var cli CLI
+	ctx := kong.Parse(&cli)
+	configPath := kong.ExpandPath(cli.ConfigPath)
+	config, err := LoadConfiguration(configPath)
+	if err != nil {
+		// Could not load configuration file
+		fmt.Fprintf(os.Stderr, "could not load configuration file %s: %s\n", configPath, err)
+		os.Exit(1)
+	}
 
-	// args := os.Args[1:]
-	// if flag, ok := os.LookupEnv("KEYCONJURERFLAGS"); ok {
-	// 	args = append(args, strings.Split(flag, " ")...)
-	// }
+	appCtx := AppContext{
+		Config:       &config,
+		OIDCDomain:   cli.OIDCDomain,
+		OIDCClientID: cli.OIDCClientID,
+	}
 
-	// rootCmd.SetArgs(args)
-	ctx := kong.Parse(&CLI{})
-	err := ctx.Run(&AppContext{Config: nil})
+	// Set the defaults that are injected by the build process if the user didn't provide any.
+	if appCtx.OIDCClientID == "" {
+		appCtx.OIDCClientID = ClientID
+	}
+
+	if appCtx.OIDCDomain == "" {
+		appCtx.OIDCDomain = OIDCDomain
+	}
+
+	// TODO:
+	// timeout, _ := cmd.Flags().GetInt(FlagTimeout)
+	// nextCtx, _ := context.WithTimeout(cmd.Context(), time.Duration(timeout)*time.Second)
+	// cmd.SetContext(ConfigContext(nextCtx, &config, configPath))
+
+	err = ctx.Run(&appCtx)
 
 	if IsWindowsPortAccessError(err) {
 		fmt.Fprintf(os.Stderr, "Encountered an issue when opening the port for KeyConjurer: %s\n", err)
@@ -72,5 +100,12 @@ func main() {
 		// Probably a cobra error.
 		cobra.CheckErr(err)
 		os.Exit(ExitCodeUnknownError)
+	}
+
+	err = SaveConfiguration(configPath, config)
+	if err != nil {
+		// Could not save configuration for some reason
+		fmt.Fprintf(os.Stderr, "Could not save configuration: %s\n", err)
+		os.Exit(1)
 	}
 }
