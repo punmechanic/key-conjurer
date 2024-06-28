@@ -31,19 +31,22 @@ var (
 	permittedShellTypes              = []string{shellTypePowershell, shellTypeBash, shellTypeBasic, shellTypeInfer}
 )
 
-func init() {
-	getCmd.Flags().String(FlagRegion, "us-west-2", "The AWS region to use")
-	getCmd.Flags().Uint(FlagTimeToLive, 1, "The key timeout in hours from 1 to 8.")
-	getCmd.Flags().UintP(FlagTimeRemaining, "t", DefaultTimeRemaining, "Request new keys if there are no keys in the environment or the current keys expire within <time-remaining> minutes. Defaults to 60.")
-	getCmd.Flags().StringP(FlagRoleName, "r", "", "The name of the role to assume.")
-	getCmd.Flags().String(FlagRoleSessionName, "KeyConjurer-AssumeRole", "the name of the role session name that will show up in CloudTrail logs")
-	getCmd.Flags().StringP(FlagOutputType, "o", outputTypeEnvironmentVariable, "Format to save new credentials in. Supported outputs: env, awscli,tencentcli")
-	getCmd.Flags().String(FlagShellType, shellTypeInfer, "If output type is env, determines which format to output credentials in - by default, the format is inferred based on the execution environment. WSL users may wish to overwrite this to `bash`")
-	getCmd.Flags().String(FlagTencentCLIPath, "~/.tencent/", "Path for directory used by the tencent-cli tool. Default is \"~/.tencent\".")
-	getCmd.Flags().String(FlagCloudType, "aws", "Choose a cloud vendor. Default is aws. Can choose aws or tencent")
-	getCmd.Flags().Bool(FlagBypassCache, false, "Do not check the cache for accounts and send the application ID as-is to Okta. This is useful if you have an ID you know is an Okta application ID and it is not stored in your local account cache.")
-	getCmd.Flags().Bool(FlagLogin, false, "Login to Okta before running the command")
-	getCmd.Flags().String(FlagAWSCLIPath, "~/.aws/", "Path for directory used by the aws CLI")
+type GetCommand struct {
+	Region          string `default:"us-west-2" env:"AWS_REGION" help:"The region to retrieve credentials in"`
+	Role            string `name:"role" short:"r" help:"The name of the role to assume." required:""`
+	SessionName     string `name:"session-name" help:"The name of the role session name that will show up in CloudTrail logs" default:"KeyConjurer-AssumeRole"`
+	Output          string `short:"o" name:"output" enum:"awscli,tencentcli,file,env" default:"env" help:"Specifies how to output credentials. Env outputs to Environment Variables according to the cloud type; awscli, tencentcli and file all deposit to an ini-style file"`
+	Shell           string `name:"shell" default:"infer" help:"If output type is env, determines which format to output credentials in - by default, the format is inferred based on the execution environment. WSL users may wish to overwrite this to bash"`
+	OutputDirectory string `name:"directory" optional:"" help:"If output is set to awscli, tencentcli or file, the directory to deposit the credentials into"`
+	BypassCache     bool   `name:"bypass-cache" default:"false" help:"Do not check the cache for accounts and send the application ID as-is to Okta. This is useful if you have an ID you know is an Okta application ID and it is not stored in your local account cache"`
+	Login           bool   `name:"login" default:"false" help:"Login to Okta before running the command"`
+	Cloud           string `enum:"aws,tencent" default:"aws" help:"The cloud you are generating credentials for"`
+	TimeToLive      int    `name:"ttl" default:"1" help:"The key timeout in hours from 1 to 8"`
+	TimeRemaining   int    `name:"time-remaining" default:"60" help:"Request new keys if there are no keys in the environment or the current keys expire within <time-remaining> minutes."`
+}
+
+func (g GetCommand) Run(appCtx *AppContext) error {
+	return nil
 }
 
 func isMemberOfSlice(slice []string, val string) bool {
@@ -63,12 +66,12 @@ func resolveApplicationInfo(cfg *Config, bypassCache bool, nameOrID string) (*Ac
 	return cfg.FindAccount(nameOrID)
 }
 
-var getCmd = &cobra.Command{
-	Use:   "get <accountName/alias>",
-	Short: "Retrieves temporary cloud API credentials.",
-	Long: `Retrieves temporary cloud API credentials for the specified account.  It sends a push request to the first Duo device it finds associated with your account.
+func (GetCommand) Help() string {
+	return `A role must be specified when using this command through the --role flag. You may list the roles you can assume through the roles command.`
+}
 
-A role must be specified when using this command through the --role flag. You may list the roles you can assume through the roles command.`,
+var getCmd = &cobra.Command{
+	Use: "get <accountName/alias>",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config := ConfigFromCommand(cmd)
 		ctx := cmd.Context()

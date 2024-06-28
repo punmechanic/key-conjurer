@@ -38,7 +38,7 @@ func init() {
 
 type CLI struct {
 	Login        LoginCommand `cmd:"login" help:"Log in to KeyConjurer using a web browser."`
-	Get          struct{}     `cmd:"get"`
+	Get          GetCommand   `cmd:"get" help:"Retrieves temporary cloud API credentials."`
 	Alias        struct{}     `cmd:"alias"`
 	Unalias      struct{}     `cmd:"unalias"`
 	ListAccounts struct{}     `cmd:"accounts"`
