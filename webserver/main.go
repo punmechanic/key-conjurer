@@ -54,8 +54,7 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 
 		buf, err := os.ReadFile(tokenFile)
 		if err != nil {
-			err := fmt.Errorf("could not read %s", tokenFile)
-			return cli.Exit(err, 1)
+			return fmt.Errorf("could not read %s", tokenFile)
 		}
 		token = string(buf)
 	}
@@ -68,8 +67,7 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 	service := api.NewOktaService(&oktaDomain, token)
 	idp, err := oidc.NewProvider(ctx, oktaDomain.String())
 	if err != nil {
-		err := fmt.Errorf("could not create OIDC provider: %w", err)
-		return cli.Exit(err, 1)
+		return fmt.Errorf("could not create OIDC provider: %w", err)
 	}
 
 	handler := api.ServeUserApplications(service, idp)
