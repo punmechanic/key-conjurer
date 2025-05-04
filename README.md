@@ -24,29 +24,12 @@ feature request, please feel free to raise a pull request or an issue against
 this repository. You're also welcome to fork the code and modify it as you see
 fit.
 
-# Pre-Deployment Steps
-
-## Platform Pre-Deployment Resources
-
-1. Make an S3 Bucket:
-
-```
-aws s3api create-bucket --bucket <terraform state bucket> --region us-west-2 --create-bucket-configuration LocationConstraint=us-west-2
-```
-
-3. A VPC w/ Subnets to access service
-4. Setup a `KMS` key
-
-## Setup Build Environment
+## Dependencies
 
 - go 1.20+
 - node 16.17.0+
 
-## Setting Up Your Variable Files
-
-Create `prod.env` based on `example.env`.
-
-### Configuration
+### Administration
 
 #### Okta setup
 
@@ -76,46 +59,10 @@ enumerating applications within Okta's API is currently considered an
 administrative action, and as such, using a users access token to perform this
 action requires the user to be an administrator on the Okta tenant.
 
-The lambda function has a couple of sensitive values. We use Vault at Riot to
-store sensitive values. The Lambda function must be configured to access Vault.
-Secrets can also be retrieved from environment variables directly, but we do not
-recommend it.
+The Lambda function is deployed as a Docker container. It's up to you to decide
+how to launch the Docker container, but you'll need to specify two values:
 
-#### Vault
-
-To use Vault, the following environment variables must be configured:
-
-| Variable             | Purpose                                              |
-| -------------------- | ---------------------------------------------------- |
-| KC_SECRET_MOUNT_PATH | The mount path of your Vault secrets mount           |
-| KC_SECRET_PATH       | The path to the Vault secret containing your secrets |
-
-The Vault secret should contain the following set of key-values - the values are
-examples and should be replaced as contextually appropriate:
-
-```
-okta_host=https://example.okta.com
-okta_token={API TOKEN}
-```
-
-`{API_TOKEN}` must be replaced with an API token for Okta that has the
-`okta.apps.read` scope.
-
-**The Lambda function does not handle authentication with Vault**. It is
-expected that you deploy the Lambda function with the
-[Hashicorp Vault Lambda Extension](https://developer.hashicorp.com/vault/docs/platform/aws/lambda-extension).
-How this Lambda extension is added depends on how you deploy your Lambda
-function and you should follow the instructions in the given link.
-
-#### Environment Variables
-
-We advise against using environment variables for secrets in AWS Lambda as they
-are persisted in plaintext. As such, your Okta API token may be leaked. If you
-would prefer to use environment variables, however, you must provide the
-following environment variables to your Lambda configuration:
-
-| Variable          | Purpose                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
-| OKTA_HOST         | The hostname of your Okta instance. We'd recommend using a vanity domain, such as https://singlesignon.example.com. |
-| OKTA_TOKEN        | A token from Okta that has the `okta.apps.read` scope.                                                              |
-| SETTINGS_PROVIDER | This must be set to 'env' for the Lambda functions to read from the environment.                                    |
+| Flag                                      | Purpose                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--okta-host`                             | The hostname of your Okta instance. This may also be set via `KEYCONJURER_OKTA_HOST`.                                                                                                                                                                                                                  |
+| `--okta-token` **or** `--okta-token-file` | An API token for your Okta instance. This must have the `okta.apps.read` scope. You may set `--okta-token-file` instead of `--okta-token` if you're supplying secrets to the container via a volume. This may also be set via `KEYCONJURER_OKTA_TOKEN` and `KEYCONJURER_OKTA_TOKEN_FILE` respectively. |
